@@ -1,0 +1,126 @@
+package com.example.bank;
+
+import org.springframework.context.annotation.*;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.orm.jpa.*;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
+
+import javax.sql.DataSource;
+import jakarta.persistence.*;
+
+// ---------- Entities ----------
+@Entity
+class Account {
+    @Id
+    private int id;
+    private String name;
+    private double balance;
+
+    public Account() {}
+    public Account(int id, String name, double balance) {
+        this.id = id;
+        this.name = name;
+        this.balance = balance;
+    }
+
+    public int getId() { return id; }
+    public double getBalance() { return balance; }
+    public void setBalance(double balance) { this.balance = balance; }
+}
+
+@Entity
+class TransactionRecord {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+    private int fromAccount;
+    private int toAccount;
+    private double amount;
+    private java.util.Date date = new java.util.Date();
+
+    public TransactionRecord() {}
+    public TransactionRecord(int from, int to, double amt) {
+        this.fromAccount = from;
+        this.toAccount = to;
+        this.amount = amt;
+    }
+}
+
+// ---------- Service Layer ----------
+@Service
+class BankService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Transactional
+    public void transferMoney(int fromId, int toId, double amount) {
+        Account from = em.find(Account.class, fromId);
+        Account to = em.find(Account.class, toId);
+
+        if (from == null || to == null)
+            throw new RuntimeException("Account not found!");
+
+        from.setBalance(from.getBalance() - amount);
+        to.setBalance(to.getBalance() + amount);
+
+        em.persist(from);
+        em.persist(to);
+        em.persist(new TransactionRecord(fromId, toId, amount));
+
+        // Simulate rollback
+        if (amount > 5000)
+            throw new RuntimeException("Transfer limit exceeded! Rolling back...");
+    }
+}
+
+// ---------- Configuration ----------
+@Configuration
+@EnableTransactionManagement
+@ComponentScan("com.example.bank")
+class AppConfig {
+
+    @Bean
+    public DataSource dataSource() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        ds.setUrl("jdbc:mysql://localhost:3306/bankdb");
+        ds.setUsername("root");
+        ds.setPassword("root");
+        return ds;
+    }
+
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
+        LocalContainerEntityManagerFactoryBean emf = new LocalContainerEntityManagerFactoryBean();
+        emf.setDataSource(dataSource());
+        emf.setPackagesToScan("com.example.bank");
+        emf.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+        return emf;
+    }
+
+    @Bean
+    public PlatformTransactionManager transactionManager(EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+}
+
+// ---------- Main ----------
+public class SpringHibernateTransactionApp {
+    public static void main(String[] args) {
+        AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(AppConfig.class);
+        BankService bank = ctx.getBean(BankService.class);
+
+        try {
+            bank.transferMoney(1, 2, 3000);  // ✅ Successful
+            bank.transferMoney(1, 2, 8000);  // ❌ Rolls back
+        } catch (Exception e) {
+            System.out.println("Transaction Failed: " + e.getMessage());
+        }
+
+        ctx.close();
+    }
+}
