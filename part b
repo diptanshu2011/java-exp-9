@@ -1,0 +1,97 @@
+package com.example.hibernatecrud;
+
+import org.hibernate.*;
+import org.hibernate.cfg.Configuration;
+import jakarta.persistence.*;
+
+// ---------- Entity ----------
+@Entity
+@Table(name = "student")
+class Student {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int id;
+
+    private String name;
+    private String course;
+
+    public Student() {}
+    public Student(String name, String course) {
+        this.name = name;
+        this.course = course;
+    }
+
+    // getters & setters
+    public int getId() { return id; }
+    public String getName() { return name; }
+    public String getCourse() { return course; }
+    public void setCourse(String course) { this.course = course; }
+}
+
+// ---------- DAO ----------
+class StudentDAO {
+    private static SessionFactory factory =
+            new Configuration().configure().addAnnotatedClass(Student.class).buildSessionFactory();
+
+    public void createStudent(Student s) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+        session.save(s);
+        tx.commit();
+        session.close();
+        System.out.println("✅ Student added successfully");
+    }
+
+    public Student readStudent(int id) {
+        Session session = factory.openSession();
+        Student s = session.get(Student.class, id);
+        session.close();
+        return s;
+    }
+
+    public void updateStudent(int id, String newCourse) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+        Student s = session.get(Student.class, id);
+        if (s != null) {
+            s.setCourse(newCourse);
+            session.update(s);
+        }
+        tx.commit();
+        session.close();
+        System.out.println("✅ Student updated successfully");
+    }
+
+    public void deleteStudent(int id) {
+        Session session = factory.openSession();
+        Transaction tx = session.beginTransaction();
+        Student s = session.get(Student.class, id);
+        if (s != null) session.delete(s);
+        tx.commit();
+        session.close();
+        System.out.println("✅ Student deleted successfully");
+    }
+}
+
+// ---------- Main ----------
+public class HibernateCRUDApp {
+    public static void main(String[] args) {
+
+        StudentDAO dao = new StudentDAO();
+
+        // CREATE
+        Student s1 = new Student("Ravi", "Java");
+        dao.createStudent(s1);
+
+        // READ
+        Student s2 = dao.readStudent(1);
+        if (s2 != null)
+            System.out.println("Student: " + s2.getName() + " - " + s2.getCourse());
+
+        // UPDATE
+        dao.updateStudent(1, "Spring Boot");
+
+        // DELETE
+        dao.deleteStudent(1);
+    }
+}
